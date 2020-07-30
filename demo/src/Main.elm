@@ -33,7 +33,7 @@ main =
 type alias Model =
     { content : String
     , authToken : String
-    , sha : String
+    , file_sha : String
     , owner : String
     , repo : String
     , branch : String
@@ -41,6 +41,8 @@ type alias Model =
     , headSha : String
     , headUrl : String
     , commit_sha : String
+    , tree_sha : String
+    , tree_url : String
     , message : String
     , output : String
     }
@@ -57,9 +59,8 @@ type Msg
     | InputOwner String
     | InputRepo String
     | CreateBlob
-    | GitHubFileCreated (Result Http.Error { content : { sha : String } })
-    | GetBlob
-    | BlobReceived (Result Http.Error String)
+    | GitHubFileCreated FileOperation (Result Http.Error { content : { sha : String } })
+    | BlobReceived (Result Http.Error { sha : String })
     | LocalFileRequested FileOperation
     | LocalFileLoaded FileOperation File
     | LocalFileContentDecoded FileOperation String
@@ -79,15 +80,17 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { authToken = "57d3c1eabff91cc454d109ac4e5246de56fea359"
+    ( { authToken = ""
       , output = ""
-      , sha = ""
+      , file_sha = ""
       , owner = "jxxcarlson"
       , repo = "minilatex-docs"
       , branch = "master"
       , headSha = ""
       , headUrl = ""
       , commit_sha = ""
+      , tree_sha = ""
+      , tree_url = ""
       , message = "No message for now"
       , fileName = ""
       , content = ""
@@ -110,7 +113,7 @@ update msg model =
             ( { model | authToken = str }, Cmd.none )
 
         InputSha str ->
-            ( { model | sha = str }, Cmd.none )
+            ( { model | file_sha = str }, Cmd.none )
 
         InputOwner str ->
             ( { model | owner = str }, Cmd.none )
@@ -118,21 +121,19 @@ update msg model =
         InputRepo str ->
             ( { model | repo = str }, Cmd.none )
 
-        GetBlob ->
-            ( model
-            , Task.attempt BlobReceived
-                (Github.getBlob
-                    { owner = model.owner
-                    , repo = model.repo
-                    , sha = model.sha
-                    }
-                )
-            )
-
+        -- GetBlob ->
+        --     ( model
+        --     , Task.attempt BlobReceived
+        --         (Github.getBlob
+        --             { owner = model.owner
+        --             , repo = model.repo
+        --             , sha = model.file_sha
+        --             }
+        --         )
+        --     )
         GetHeadRef ->
             ( model
-            , Task.attempt GotHeadRef
-                (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
+            , getHeadRefTask
             )
 
         GotHeadRef result ->
@@ -157,16 +158,13 @@ update msg model =
                             Debug.log "GotCommitInfo" data
                     in
                     -- TODO createBlob
-                    ( { model | commit_sha = data.commit_sha }
-                    , createBlob FUpdate
-                        { authToken = model.authToken
-                        , repo = model.repo
-                        , owner = model.owner
-                        , branch = model.branch
-                        , path = model.fileName
-                        , message = model.message
-                        , content = model.content
-                        }
+                    ( { model
+                        | commit_sha = data.commit_sha
+                        , tree_sha = data.tree_sha
+                        , tree_url = data.tree_url
+                      }
+                    , Cmd.none
+                      -- TODO tree opd
                     )
 
                 Err err ->
@@ -181,13 +179,8 @@ update msg model =
                 Err errMsg ->
                     ( { model | output = Debug.toString errMsg }, Cmd.none )
 
-                Ok str ->
-                    case Base64.decode (String.trim str) of
-                        Err _ ->
-                            ( { model | output = "Error: " ++ str }, Cmd.none )
-
-                        Ok content ->
-                            ( { model | content = content }, Cmd.none )
+                Ok data ->
+                    ( { model | file_sha = data.sha }, getHeadRefTask )
 
         CreateBlob ->
             -- TODO: check out sha field
@@ -204,17 +197,26 @@ update msg model =
                 }
             )
 
-        GitHubFileCreated result ->
+        GitHubFileCreated fileOperation result ->
             let
                 _ =
                     Debug.log "GitHubFileCreated" result
+
+                cmd =
+                    case fileOperation of
+                        FCreate ->
+                            Cmd.none
+
+                        FUpdate ->
+                            -- Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" }
+                            Cmd.none
             in
             case result of
                 Err errMsg ->
-                    ( { model | output = Debug.toString errMsg }, Cmd.none )
+                    ( { model | output = Debug.toString errMsg }, cmd )
 
                 Ok reply ->
-                    ( { model | output = reply.content.sha }, Cmd.none )
+                    ( { model | output = reply.content.sha, file_sha = reply.content.sha }, cmd )
 
         LocalFileRequested fileOperation ->
             ( model, Select.file [ "application/text" ] (LocalFileLoaded fileOperation) )
@@ -269,22 +271,50 @@ update msg model =
 createBlob fileOperation params =
     let
         sha =
-            case fileOperation of
-                FCreate ->
-                    ""
+            Debug.log "createBlob, sha"
+                (case fileOperation of
+                    FCreate ->
+                        ""
 
-                FUpdate ->
-                    params.content |> SHA1.fromString |> SHA1.toHex
+                    FUpdate ->
+                        -- params.content |> SHA1.fromString |> SHA1.toHex
+                        "54f9d6da5c91d556e6b54340b1327573073030af"
+                )
     in
-    Task.attempt GitHubFileCreated
+    case fileOperation of
+        FCreate ->
+            createFileTask fileOperation params
+
+        FUpdate ->
+            createBlobTask fileOperation params
+
+
+getHeadRefTask =
+    Task.attempt GotHeadRef
+        (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
+
+
+createFileTask fileOperation params =
+    Task.attempt (GitHubFileCreated fileOperation)
         (Github.updateFileContents
             { authToken = params.authToken
             , owner = params.owner
             , repo = params.repo
             , branch = params.branch
             , path = params.path
-            , sha = sha
+            , sha = ""
             , message = params.message
+            , content = Debug.log "createBlob, content" params.content
+            }
+        )
+
+
+createBlobTask fileOperation params =
+    Task.attempt BlobReceived
+        (Github.createBlob
+            { authToken = params.authToken
+            , owner = params.owner
+            , repo = params.repo
             , content = Debug.log "createBlob, content" params.content
             }
         )
@@ -320,7 +350,7 @@ mainColumn model =
             , inputSha model
             , inputOwner model
             , inputRepo model
-            , row [ spacing 12, Element.moveRight 4 ] [ getBlobButton, createBlobButton, getHeadRefButton ]
+            , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton, getHeadRefButton ]
             , el [ Font.size 14 ] (text ("sha: " ++ model.output))
             , outputDisplay model
             ]
@@ -361,7 +391,7 @@ inputSha : Model -> Element Msg
 inputSha model =
     Input.text []
         { onChange = InputSha
-        , text = model.sha
+        , text = model.file_sha
         , placeholder = Just (Input.placeholder [] (el [] (text "sha")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
@@ -397,14 +427,15 @@ getHeadRefButton =
         ]
 
 
-getBlobButton : Element Msg
-getBlobButton =
-    row [ centerX ]
-        [ Input.button buttonStyle
-            { onPress = Just GetBlob
-            , label = el [ width (px 100), centerX, centerY ] (text "Get blob")
-            }
-        ]
+
+-- getBlobButton : Element Msg
+-- getBlobButton =
+--     row [ centerX ]
+--         [ Input.button buttonStyle
+--             { onPress = Just GetBlob
+--             , label = el [ width (px 100), centerX, centerY ] (text "Get blob")
+--             }
+--         ]
 
 
 createBlobButton : Element Msg
