@@ -1,0 +1,8 @@
+/node_modules/
+/elm-stuff/
+/package-lock.json
+/documentation.json
+demo/index.html
+demo/elm-stuff/
+NOTES.md
+demo/**.txt
