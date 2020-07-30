@@ -32,13 +32,16 @@ main =
 
 type alias Model =
     { content : String
-    , accessToken : String
+    , authToken : String
     , sha : String
     , owner : String
     , repo : String
+    , branch : String
     , fileName : String
     , headSha : String
     , headUrl : String
+    , commit_sha : String
+    , message : String
     , output : String
     }
 
@@ -53,15 +56,21 @@ type Msg
     | InputSha String
     | InputOwner String
     | InputRepo String
-    | CreateGithubFile
+    | CreateBlob
     | GitHubFileCreated (Result Http.Error { content : { sha : String } })
     | GetBlob
     | BlobReceived (Result Http.Error String)
-    | LocalFileRequested
-    | LocalFileLoaded File
-    | LocalFileContentDecoded String
+    | LocalFileRequested FileOperation
+    | LocalFileLoaded FileOperation File
+    | LocalFileContentDecoded FileOperation String
     | GetHeadRef
     | GotHeadRef (Result Http.Error { sha : String, url : String })
+    | GotCommitInfo (Result Http.Error { commit_sha : String, tree_sha : String, tree_url : String })
+
+
+type FileOperation
+    = FCreate
+    | FUpdate
 
 
 type alias Flags =
@@ -70,13 +79,16 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { accessToken = "dc739157b778090b18841a6a6dd02adfebff85e9"
+    ( { authToken = "57d3c1eabff91cc454d109ac4e5246de56fea359"
       , output = ""
       , sha = ""
       , owner = "jxxcarlson"
       , repo = "minilatex-docs"
+      , branch = "master"
       , headSha = ""
       , headUrl = ""
+      , commit_sha = ""
+      , message = "No message for now"
       , fileName = ""
       , content = ""
       }
@@ -95,7 +107,7 @@ update msg model =
             ( model, Cmd.none )
 
         InputAccessToken str ->
-            ( { model | accessToken = str }, Cmd.none )
+            ( { model | authToken = str }, Cmd.none )
 
         InputSha str ->
             ( { model | sha = str }, Cmd.none )
@@ -131,7 +143,30 @@ update msg model =
                         , headUrl = Debug.log "head, url" data.url
                         , content = "sha: " ++ data.sha ++ ", data: " ++ data.sha ++ "\nurl: " ++ data.url
                       }
-                    , Cmd.none
+                    , getCommitInfo model.owner model.repo data.sha
+                    )
+
+                Err err ->
+                    ( { model | output = Debug.toString err }, Cmd.none )
+
+        GotCommitInfo result ->
+            case result of
+                Ok data ->
+                    let
+                        _ =
+                            Debug.log "GotCommitInfo" data
+                    in
+                    -- TODO createBlob
+                    ( { model | commit_sha = data.commit_sha }
+                    , createBlob FUpdate
+                        { authToken = model.authToken
+                        , repo = model.repo
+                        , owner = model.owner
+                        , branch = model.branch
+                        , path = model.fileName
+                        , message = model.message
+                        , content = model.content
+                        }
                     )
 
                 Err err ->
@@ -154,9 +189,19 @@ update msg model =
                         Ok content ->
                             ( { model | content = content }, Cmd.none )
 
-        CreateGithubFile ->
+        CreateBlob ->
+            -- TODO: check out sha field
             ( model
-            , createGithubFile model model.fileName model.content
+            , createBlob FCreate
+                { authToken = model.authToken
+                , owner = model.owner
+                , repo = model.repo
+                , branch = model.branch
+                , path = model.fileName
+                , sha = ""
+                , message = model.message
+                , content = model.content
+                }
             )
 
         GitHubFileCreated result ->
@@ -171,10 +216,10 @@ update msg model =
                 Ok reply ->
                     ( { model | output = reply.content.sha }, Cmd.none )
 
-        LocalFileRequested ->
-            ( model, Select.file [ "application/text" ] LocalFileLoaded )
+        LocalFileRequested fileOperation ->
+            ( model, Select.file [ "application/text" ] (LocalFileLoaded fileOperation) )
 
-        LocalFileLoaded file ->
+        LocalFileLoaded fileOperation file ->
             let
                 _ =
                     Debug.log "FILE" (File.name file)
@@ -182,15 +227,25 @@ update msg model =
                 _ =
                     Debug.log "SIZE" (File.size file)
             in
-            ( { model | fileName = File.name file }, Task.perform LocalFileContentDecoded (File.toString file) )
+            ( { model | fileName = File.name file }, Task.perform (LocalFileContentDecoded fileOperation) (File.toString file) )
 
-        LocalFileContentDecoded content ->
+        LocalFileContentDecoded fileOperation content ->
             let
                 _ =
                     Debug.log "CONTENT" content
             in
+            -- TODO checkout sha field
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
-            , createGithubFile model model.fileName content
+            , createBlob fileOperation
+                { authToken = model.authToken
+                , owner = model.owner
+                , repo = model.repo
+                , branch = model.branch
+                , path = model.fileName
+                , sha = ""
+                , message = model.message
+                , content = content
+                }
             )
 
 
@@ -199,19 +254,48 @@ update msg model =
 -- https://api.github.com/repos/jxxcarlson/minilatex-docs/contents/jabberwocky.txt
 -- https://api.github.com/repos/jxxcarlson/minilatex-docs/contents/jabberwocky.txt?refs=master
 -- http://www.levibotelho.com/development/commit-a-file-with-the-github-api/
+-- createBlob :
+--     FileOperation
+--     ->
+--         { authToken : String
+--         , repo : String
+--         , branch : String
+--         , path : String
+--         , message : String
+--         , content : String
+--         }
 
 
-createGithubFile model fileName content =
+createBlob fileOperation params =
+    let
+        sha =
+            case fileOperation of
+                FCreate ->
+                    ""
+
+                FUpdate ->
+                    params.content |> SHA1.fromString |> SHA1.toHex
+    in
     Task.attempt GitHubFileCreated
         (Github.updateFileContents
-            { authToken = model.accessToken
-            , owner = model.owner
-            , repo = model.repo
-            , branch = "master"
-            , path = fileName
-            , sha = content |> SHA1.fromString |> SHA1.toHex
-            , message = "First commit"
-            , content = content
+            { authToken = params.authToken
+            , owner = params.owner
+            , repo = params.repo
+            , branch = params.branch
+            , path = params.path
+            , sha = sha
+            , message = params.message
+            , content = Debug.log "createBlob, content" params.content
+            }
+        )
+
+
+getCommitInfo owner repo sha =
+    Task.attempt GotCommitInfo
+        (Github.getCommitInfo
+            { owner = owner
+            , repo = repo
+            , sha = sha
             }
         )
 
@@ -267,7 +351,7 @@ inputAccessToken : Model -> Element Msg
 inputAccessToken model =
     Input.text []
         { onChange = InputAccessToken
-        , text = model.accessToken
+        , text = model.authToken
         , placeholder = Just (Input.placeholder [] (el [] (text "access token")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
@@ -327,8 +411,18 @@ createBlobButton : Element Msg
 createBlobButton =
     row [ centerX ]
         [ Input.button buttonStyle
-            { onPress = Just LocalFileRequested
+            { onPress = Just (LocalFileRequested FCreate)
             , label = el [ width (px 100), centerX, centerY ] (text "Create file")
+            }
+        ]
+
+
+updateBlobButton : Element Msg
+updateBlobButton =
+    row [ centerX ]
+        [ Input.button buttonStyle
+            { onPress = Just (LocalFileRequested FUpdate)
+            , label = el [ width (px 100), centerX, centerY ] (text "Update file")
             }
         ]
 
@@ -354,42 +448,3 @@ buttonStyle =
     , Font.color (rgb255 255 255 255)
     , paddingXY 15 8
     ]
-
-
-strr =
-    """
-Twas brillig, and the slithy toves
-Did gyre and gimble in the wabe;
-All mimsy were the borogoves,
-And the mome raths outgrabe.
-
-Beware the Jabberwock, my son!
-The jaws that bite, the claws that catch!
-Beware the Jubjub bird, and shun
-The frumious Bandersnatch!
-
-He took his vorpal sword in hand:
-Long time the manxome foe he sought —
-So rested he by the Tumtum tree,
-And stood awhile in thought.
-
-And as in uffish thought he stood,
-The Jabberwock, with eyes of flame,
-Came whiffling through the tulgey wood,
-And burbled as it came!
-
-One, two! One, two! And through and through
-The vorpal blade went snicker-snack!
-He left it dead, and with its head
-He went galumphing back.
-
-And hast thou slain the Jabberwock?
-Come to my arms, my beamish boy!
-O frabjous day! Callooh! Callay!
-He chortled in his joy.
-
-Twas brillig, and the slithy toves
-Did gyre and gimble in the wabe;
-All mimsy were the borogoves,
-And the mome raths outgrabe.
-"""

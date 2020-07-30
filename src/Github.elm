@@ -3,7 +3,7 @@ module Github exposing
     , getCommit, createCommit
     , PullRequest, getPullRequests, getPullRequest, createPullRequest
     , getFileContents, updateFileContents
-    , getHeadRef
+    , getHeadRef, getCommitInfo
     , getComments, createComment
     , createBlob, getBlob
     )
@@ -14,7 +14,7 @@ module Github exposing
 @docs getCommit, createCommit
 @docs PullRequest, getPullRequests, getPullRequest, createPullRequest
 @docs getFileContents, updateFileContents
-@docs getHeadRef
+@docs getHeadRef, getCommitInfo
 
 
 ## Issues
@@ -140,7 +140,7 @@ createBlob params =
             Http.jsonBody
                 (Json.Encode.object
                     [ ( "content", Json.Encode.string params.content )
-                    , ( "encoding", Json.Encode.string "utf-8" )
+                    , ( "encoding", Json.Encode.string "utf-8|base64" )
                     ]
                 )
         , resolver = jsonResolver decoder
