@@ -563,7 +563,7 @@ updateRef params =
         decoder =
             Json.Decode.map
                 (\sha_ -> { sha = sha_ })
-                (Json.Decode.at [ "sha" ] Json.Decode.string)
+                (Json.Decode.at [ "object", "sha" ] Json.Decode.string)
     in
     Http.task
         { method = "PATCH"

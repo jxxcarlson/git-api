@@ -302,7 +302,7 @@ update msg model =
                     ( { model | output = "REF: " ++ reply.sha }, Cmd.none )
 
                 Err err ->
-                    ( { model | output = Debug.toString err }, Cmd.none )
+                    ( { model | output = "!!!!" ++ Debug.toString err }, Cmd.none )
 
 
 
@@ -321,7 +321,7 @@ updateRefTask model newCommitSha =
             , repo = model.repo
             , branch = model.branch
             , force = True
-            , sha = newCommitSha -- model.new_commit_sha
+            , sha = newCommitSha
             }
         )
 
