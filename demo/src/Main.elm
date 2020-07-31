@@ -62,8 +62,7 @@ type Msg
     | InputSha String
     | InputOwner String
     | InputRepo String
-    | CreateBlob
-    | GitHubFileCreated FileOperation (Result Http.Error { content : { sha : String } })
+    | GitHubFileCreated (Result Http.Error { content : { sha : String } })
     | BlobReceived (Result Http.Error { sha : String })
     | LocalFileRequested FileOperation
     | LocalFileLoaded FileOperation File
@@ -120,6 +119,7 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
+        -- INPUT
         InputAccessToken str ->
             ( { model | authToken = str }, Cmd.none )
 
@@ -132,6 +132,28 @@ update msg model =
         InputRepo str ->
             ( { model | repo = str }, Cmd.none )
 
+        -- FILE
+        LocalFileRequested fileOperation ->
+            ( model, Select.file [ "application/text" ] (LocalFileLoaded fileOperation) )
+
+        LocalFileLoaded fileOperation file ->
+            ( { model | fileName = File.name file }, Task.perform (LocalFileContentDecoded fileOperation) (File.toString file) )
+
+        LocalFileContentDecoded fileOperation content ->
+            ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
+            , createBlob2Cmd fileOperation
+                { authToken = model.authToken
+                , owner = model.owner
+                , repo = model.repo
+                , branch = model.branch
+                , path = model.fileName
+                , sha = ""
+                , message = model.message
+                , content = content
+                }
+            )
+
+        -- COMMIT CHANGE
         GetHeadRef ->
             ( model
             , getHeadRefCmd
@@ -182,82 +204,13 @@ update msg model =
                 Ok data ->
                     ( { model | file_sha = data.sha }, getHeadRefCmd )
 
-        CreateBlob ->
-            -- TODO: check out sha field
-            ( model
-            , createBlob2Cmd FCreate
-                { authToken = model.authToken
-                , owner = model.owner
-                , repo = model.repo
-                , branch = model.branch
-                , path = model.fileName
-                , sha = ""
-                , message = model.message
-                , content = model.content
-                }
-            )
-
-        GitHubFileCreated fileOperation result ->
-            let
-                _ =
-                    Debug.log "GitHubFileCreated" result
-
-                cmd =
-                    case fileOperation of
-                        FCreate ->
-                            Cmd.none
-
-                        FUpdate ->
-                            Cmd.none
-            in
+        GitHubFileCreated result ->
             case result of
                 Err errMsg ->
-                    ( { model | output = Debug.toString errMsg }, cmd )
+                    ( { model | output = Debug.toString errMsg }, Cmd.none )
 
                 Ok reply ->
-                    ( { model | output = reply.content.sha, file_sha = reply.content.sha }, cmd )
-
-        LocalFileRequested fileOperation ->
-            let
-                _ =
-                    Debug.log "@@@" "1: LocalFileRequested"
-            in
-            ( model, Select.file [ "application/text" ] (LocalFileLoaded fileOperation) )
-
-        LocalFileLoaded fileOperation file ->
-            let
-                _ =
-                    Debug.log "FILE" (File.name file)
-
-                _ =
-                    Debug.log "SIZE" (File.size file)
-
-                _ =
-                    Debug.log "@@@" "2: LocalFileLoaded"
-            in
-            ( { model | fileName = File.name file }, Task.perform (LocalFileContentDecoded fileOperation) (File.toString file) )
-
-        LocalFileContentDecoded fileOperation content ->
-            let
-                _ =
-                    Debug.log "CONTENT" content
-
-                _ =
-                    Debug.log "@@@" "3: LocalFileContentDecoded"
-            in
-            -- TODO checkout sha field
-            ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
-            , createBlob2Cmd fileOperation
-                { authToken = model.authToken
-                , owner = model.owner
-                , repo = model.repo
-                , branch = model.branch
-                , path = model.fileName
-                , sha = ""
-                , message = model.message
-                , content = content
-                }
-            )
+                    ( { model | output = reply.content.sha, file_sha = reply.content.sha }, Cmd.none )
 
         GotTree sha ->
             let
@@ -311,10 +264,6 @@ update msg model =
 
 updateRefCmd : { a | authToken : String, owner : String, repo : String, branch : String } -> String -> Cmd Msg
 updateRefCmd model newCommitSha =
-    let
-        _ =
-            Debug.log "@@@" ("10: updateRefTask:: " ++ newCommitSha)
-    in
     Task.attempt RefUpdated
         (Github.updateRef
             { authToken = model.authToken
@@ -376,9 +325,9 @@ getHeadRefCmd =
         (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
 
 
-createFileCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
-createFileCmd fileOperation params =
-    Task.attempt (GitHubFileCreated fileOperation)
+createAndCommitFile : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
+createAndCommitFile fileOperation params =
+    Task.attempt GitHubFileCreated
         (Github.updateFileContents
             { authToken = params.authToken
             , owner = params.owner
@@ -392,8 +341,8 @@ createFileCmd fileOperation params =
         )
 
 
-createBlobCmd : a -> { b | authToken : String, owner : String, repo : String, content : String } -> Cmd Msg
-createBlobCmd fileOperation params =
+initiateUpdateAndCommit : a -> { b | authToken : String, owner : String, repo : String, content : String } -> Cmd Msg
+initiateUpdateAndCommit fileOperation params =
     let
         _ =
             Debug.log "@@@" "4: createBlobTask"
@@ -426,24 +375,12 @@ getTreeCmd url =
 
 createBlob2Cmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
 createBlob2Cmd fileOperation params =
-    let
-        sha =
-            Debug.log "createBlob, sha"
-                (case fileOperation of
-                    FCreate ->
-                        ""
-
-                    FUpdate ->
-                        -- TODO: is this correct?
-                        ""
-                )
-    in
     case fileOperation of
         FCreate ->
-            createFileCmd fileOperation params
+            createAndCommitFile fileOperation params
 
         FUpdate ->
-            createBlobCmd fileOperation params
+            initiateUpdateAndCommit fileOperation params
 
 
 getCommitInfoCmd : String -> String -> String -> Cmd Msg
