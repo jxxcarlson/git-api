@@ -208,7 +208,6 @@ update msg model =
                             Cmd.none
 
                         FUpdate ->
-                            -- Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" }
                             Cmd.none
             in
             case result of
@@ -342,7 +341,7 @@ createCommitTask model new_tree_sha =
             , repo = model.repo
             , message = Debug.log "@@! MESS" model.commit_message
             , tree = Debug.log "@@! NTSH" new_tree_sha
-            , parents = Debug.log "@@! PARENTS" [ model.headSha ] -- [ model.tree_sha ]
+            , parents = Debug.log "@@! PARENTS" [ model.headSha ]
             }
         )
 

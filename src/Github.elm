@@ -93,9 +93,6 @@ createCommit params =
         decoder =
             Json.Decode.at [ "sha" ] Json.Decode.string
                 |> Json.Decode.map (\sha -> { sha = sha })
-
-        _ =
-            Debug.log "@@! createCommit" params
     in
     Http.task
         { method = "POST"
@@ -139,7 +136,7 @@ createBlob params =
             [ Http.header "Authorization" ("token " ++ params.authToken)
             , Http.header "Accept" "application/vnd.github.v3+json"
             ]
-        , url = Debug.log "URL" <| "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/blobs"
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/blobs"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -162,7 +159,7 @@ getBlob params =
         , headers =
             [ Http.header "Accept" "application/vnd.github.v3+json"
             ]
-        , url = Debug.log "URL" <| "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/blobs" ++ "/" ++ params.sha
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/blobs" ++ "/" ++ params.sha
         , body = Http.emptyBody
         , resolver = jsonResolver decoder
         , timeout = Nothing
@@ -523,9 +520,6 @@ createTree :
     -> Task Http.Error { sha : String }
 createTree params =
     let
-        _ =
-            Debug.log "MAKE TREE @" params.tree_sha
-
         encodeInner p =
             Json.Encode.object
                 [ ( "path", Json.Encode.string p.path )
@@ -566,9 +560,6 @@ updateRef :
     -> Task Http.Error { sha : String }
 updateRef params =
     let
-        _ =
-            Debug.log "UPDATE REF" params.sha
-
         decoder =
             Json.Decode.map
                 (\sha_ -> { sha = sha_ })
