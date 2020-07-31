@@ -58,16 +58,18 @@ type alias Model =
 
 type Msg
     = NoOp
+      -- INPUT
     | InputAccessToken String
     | InputSha String
     | InputOwner String
     | InputRepo String
-    | GitHubFileCreated (Result Http.Error { content : { sha : String } })
-    | BlobReceived (Result Http.Error { sha : String })
+      -- FILE
     | LocalFileRequested FileOperation
     | LocalFileLoaded FileOperation File
     | LocalFileContentDecoded FileOperation String
-    | GetHeadRef
+      -- REPO
+    | GitHubFileCreated (Result Http.Error { content : { sha : String } })
+    | BlobReceived (Result Http.Error { sha : String })
     | GotHeadRef (Result Http.Error { sha : String, url : String })
     | GotCommitInfo (Result Http.Error { commit_sha : String, tree_sha : String, tree_url : String })
     | GotTree (Result Http.Error String)
@@ -154,11 +156,6 @@ update msg model =
             )
 
         -- COMMIT CHANGE
-        GetHeadRef ->
-            ( model
-            , getHeadRefCmd
-            )
-
         GotHeadRef result ->
             case result of
                 Ok data ->
@@ -418,7 +415,7 @@ mainColumn model =
             , inputSha model
             , inputOwner model
             , inputRepo model
-            , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton, getHeadRefButton ]
+            , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton ]
             , el [ Font.size 14 ] (text ("sha: " ++ model.output))
             , outputDisplay model
             ]
@@ -483,16 +480,6 @@ inputRepo model =
         , placeholder = Just (Input.placeholder [] (el [] (text "repo")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
-
-
-getHeadRefButton : Element Msg
-getHeadRefButton =
-    row [ centerX ]
-        [ Input.button buttonStyle
-            { onPress = Just GetHeadRef
-            , label = el [ width (px 100), centerX, centerY ] (text "HEAD ref")
-            }
-        ]
 
 
 createBlobButton : Element Msg
