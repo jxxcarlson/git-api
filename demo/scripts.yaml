@@ -1,5 +1,5 @@
 scripts:
-    make: elm make src/Main.elm
+    make: elm make --debug src/Main.elm
 
     live:
       cmd:

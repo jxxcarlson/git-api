@@ -45,6 +45,8 @@ type alias Model =
     , tree_sha : String
     , tree_url : String
     , new_tree_sha : String
+    , new_commit_sha : String
+    , commit_message : String
     , message : String
     , output : String
     }
@@ -71,6 +73,8 @@ type Msg
     | GotCommitInfo (Result Http.Error { commit_sha : String, tree_sha : String, tree_url : String })
     | GotTree (Result Http.Error String)
     | TreeCreated (Result Http.Error { sha : String })
+    | NewCommitCreated (Result Http.Error { sha : String })
+    | RefUpdated (Result Http.Error { sha : String })
 
 
 type FileOperation
@@ -96,6 +100,8 @@ init flags =
       , tree_sha = ""
       , tree_url = ""
       , new_tree_sha = ""
+      , new_commit_sha = ""
+      , commit_message = "This is a test"
       , message = "No message for now"
       , fileName = ""
       , content = ""
@@ -126,16 +132,6 @@ update msg model =
         InputRepo str ->
             ( { model | repo = str }, Cmd.none )
 
-        -- GetBlob ->
-        --     ( model
-        --     , Task.attempt BlobReceived
-        --         (Github.getBlob
-        --             { owner = model.owner
-        --             , repo = model.repo
-        --             , sha = model.file_sha
-        --             }
-        --         )
-        --     )
         GetHeadRef ->
             ( model
             , getHeadRefTask
@@ -149,7 +145,7 @@ update msg model =
                         , headUrl = Debug.log "head, url" data.url
                         , content = "sha: " ++ data.sha ++ ", data: " ++ data.sha ++ "\nurl: " ++ data.url
                       }
-                    , getCommitInfo model.owner model.repo data.sha
+                    , getCommitInfoTask model.owner model.repo data.sha
                     )
 
                 Err err ->
@@ -223,6 +219,10 @@ update msg model =
                     ( { model | output = reply.content.sha, file_sha = reply.content.sha }, cmd )
 
         LocalFileRequested fileOperation ->
+            let
+                _ =
+                    Debug.log "@@@" "1: LocalFileRequested"
+            in
             ( model, Select.file [ "application/text" ] (LocalFileLoaded fileOperation) )
 
         LocalFileLoaded fileOperation file ->
@@ -232,6 +232,9 @@ update msg model =
 
                 _ =
                     Debug.log "SIZE" (File.size file)
+
+                _ =
+                    Debug.log "@@@" "2: LocalFileLoaded"
             in
             ( { model | fileName = File.name file }, Task.perform (LocalFileContentDecoded fileOperation) (File.toString file) )
 
@@ -239,6 +242,9 @@ update msg model =
             let
                 _ =
                     Debug.log "CONTENT" content
+
+                _ =
+                    Debug.log "@@@" "3: LocalFileContentDecoded"
             in
             -- TODO checkout sha field
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
@@ -259,7 +265,7 @@ update msg model =
                 _ =
                     Debug.log "GotTree" sha
             in
-            ( model, makeTreeTask model )
+            ( model, createTreeTask model )
 
         TreeCreated result ->
             let
@@ -268,13 +274,84 @@ update msg model =
             in
             case result of
                 Ok reply ->
-                    ( { model | new_tree_sha = reply.sha }, Cmd.none )
+                    ( { model | new_tree_sha = Debug.log "@@! TreeCreated, new_tree_sha" reply.sha }
+                    , createCommitTask model reply.sha
+                    )
+
+                Err err ->
+                    ( { model | output = Debug.toString err }, Cmd.none )
+
+        NewCommitCreated result ->
+            let
+                _ =
+                    Debug.log "@@! NewCommitCreated" result
+            in
+            case result of
+                Ok reply ->
+                    ( { model | new_commit_sha = reply.sha }, updateRefTask model reply.sha )
+
+                Err err ->
+                    ( { model | output = Debug.toString err }, Cmd.none )
+
+        RefUpdated result ->
+            let
+                _ =
+                    Debug.log "11: End (RefUpdated)"
+            in
+            case result of
+                Ok reply ->
+                    ( { model | output = "REF: " ++ reply.sha }, Cmd.none )
 
                 Err err ->
                     ( { model | output = Debug.toString err }, Cmd.none )
 
 
-makeTreeTask model =
+
+-- TASKS
+
+
+updateRefTask model newCommitSha =
+    let
+        _ =
+            Debug.log "@@@" ("10: updateRefTask:: " ++ newCommitSha)
+    in
+    Task.attempt RefUpdated
+        (Github.updateRef
+            { authToken = model.authToken
+            , owner = model.owner
+            , repo = model.repo
+            , branch = model.branch
+            , force = True
+            , sha = newCommitSha -- model.new_commit_sha
+            }
+        )
+
+
+createCommitTask model new_tree_sha =
+    let
+        _ =
+            Debug.log "@@@" "9: createCommitTask"
+
+        _ =
+            Debug.log "@@! new_tree_sha" new_tree_sha
+    in
+    Task.attempt NewCommitCreated
+        (Github.createCommit
+            { authToken = model.authToken
+            , owner = model.owner
+            , repo = model.repo
+            , message = Debug.log "@@! MESS" model.commit_message
+            , tree = Debug.log "@@! NTSH" new_tree_sha
+            , parents = Debug.log "@@! PARENTS" [ model.headSha ] -- [ model.tree_sha ]
+            }
+        )
+
+
+createTreeTask model =
+    let
+        _ =
+            Debug.log "@@@" "8: createTreeTask"
+    in
     Task.attempt TreeCreated
         (Github.createTree
             { authToken = model.authToken
@@ -287,53 +364,11 @@ makeTreeTask model =
         )
 
 
-getTree : String -> Cmd Msg
-getTree url =
-    Http.get
-        { url = url
-        , expect = Http.expectJson GotTree (Json.Decode.field "sha" Json.Decode.string)
-        }
-
-
-
--- HELPERS
--- https://api.github.com/repos/jxxcarlson/minilatex-docs/contents/jabberwocky.txt
--- https://api.github.com/repos/jxxcarlson/minilatex-docs/contents/jabberwocky.txt?refs=master
--- http://www.levibotelho.com/development/commit-a-file-with-the-github-api/
--- createBlob :
---     FileOperation
---     ->
---         { authToken : String
---         , repo : String
---         , branch : String
---         , path : String
---         , message : String
---         , content : String
---         }
-
-
-createBlob fileOperation params =
-    let
-        sha =
-            Debug.log "createBlob, sha"
-                (case fileOperation of
-                    FCreate ->
-                        ""
-
-                    FUpdate ->
-                        -- params.content |> SHA1.fromString |> SHA1.toHex
-                        "54f9d6da5c91d556e6b54340b1327573073030af"
-                )
-    in
-    case fileOperation of
-        FCreate ->
-            createFileTask fileOperation params
-
-        FUpdate ->
-            createBlobTask fileOperation params
-
-
 getHeadRefTask =
+    let
+        _ =
+            Debug.log "@@@" "5: getHeadRefTask"
+    in
     Task.attempt GotHeadRef
         (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
 
@@ -354,6 +389,10 @@ createFileTask fileOperation params =
 
 
 createBlobTask fileOperation params =
+    let
+        _ =
+            Debug.log "@@@" "4: createBlobTask"
+    in
     Task.attempt BlobReceived
         (Github.createBlob
             { authToken = params.authToken
@@ -364,7 +403,48 @@ createBlobTask fileOperation params =
         )
 
 
-getCommitInfo owner repo sha =
+
+-- HELPERS
+
+
+getTree : String -> Cmd Msg
+getTree url =
+    let
+        _ =
+            Debug.log "@@@" "7: getTree"
+    in
+    Http.get
+        { url = url
+        , expect = Http.expectJson GotTree (Json.Decode.field "sha" Json.Decode.string)
+        }
+
+
+createBlob fileOperation params =
+    let
+        sha =
+            Debug.log "createBlob, sha"
+                (case fileOperation of
+                    FCreate ->
+                        ""
+
+                    FUpdate ->
+                        -- TODO: is this correct?
+                        ""
+                )
+    in
+    case fileOperation of
+        FCreate ->
+            createFileTask fileOperation params
+
+        FUpdate ->
+            createBlobTask fileOperation params
+
+
+getCommitInfoTask owner repo sha =
+    let
+        _ =
+            Debug.log "@@@" "6: getCommitInfoTask"
+    in
     Task.attempt GotCommitInfo
         (Github.getCommitInfo
             { owner = owner
@@ -469,17 +549,6 @@ getHeadRefButton =
             , label = el [ width (px 100), centerX, centerY ] (text "HEAD ref")
             }
         ]
-
-
-
--- getBlobButton : Element Msg
--- getBlobButton =
---     row [ centerX ]
---         [ Input.button buttonStyle
---             { onPress = Just GetBlob
---             , label = el [ width (px 100), centerX, centerY ] (text "Get blob")
---             }
---         ]
 
 
 createBlobButton : Element Msg

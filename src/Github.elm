@@ -5,7 +5,7 @@ module Github exposing
     , getFileContents, updateFileContents
     , getHeadRef, getCommitInfo
     , getComments, createComment
-    , createBlob, createTree, getBlob
+    , createBlob, createTree, getBlob, updateRef
     )
 
 {-|
@@ -78,6 +78,7 @@ NOTE: Not all input options and output fields are supported yet. Pull requests a
 -}
 createCommit :
     { authToken : String
+    , owner : String
     , repo : String
     , message : String
     , tree : String
@@ -92,11 +93,14 @@ createCommit params =
         decoder =
             Json.Decode.at [ "sha" ] Json.Decode.string
                 |> Json.Decode.map (\sha -> { sha = sha })
+
+        _ =
+            Debug.log "@@! createCommit" params
     in
     Http.task
         { method = "POST"
         , headers = [ Http.header "Authorization" ("token " ++ params.authToken) ]
-        , url = "https://api.github.com/repos/" ++ params.repo ++ "/git/commits"
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/commits"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -544,6 +548,41 @@ createTree params =
                 (Json.Encode.object
                     [ ( "base_tree", Json.Encode.string params.tree_sha )
                     , ( "tree", Json.Encode.list encodeInner [ { path = params.path, file_sha = params.file_sha } ] )
+                    ]
+                )
+        , resolver = jsonResolver decoder
+        , timeout = Nothing
+        }
+
+
+updateRef :
+    { authToken : String
+    , owner : String
+    , repo : String
+    , branch : String
+    , force : Bool
+    , sha : String
+    }
+    -> Task Http.Error { sha : String }
+updateRef params =
+    let
+        _ =
+            Debug.log "UPDATE REF" params.sha
+
+        decoder =
+            Json.Decode.map
+                (\sha_ -> { sha = sha_ })
+                (Json.Decode.at [ "sha" ] Json.Decode.string)
+    in
+    Http.task
+        { method = "PATCH"
+        , headers = [ Http.header "Authorization" ("token " ++ params.authToken) ]
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/refs/" ++ params.branch ++ "/HEAD"
+        , body =
+            Http.jsonBody
+                (Json.Encode.object
+                    [ ( "sha", Json.Encode.string params.sha )
+                    , ( "force", Json.Encode.bool params.force )
                     ]
                 )
         , resolver = jsonResolver decoder
