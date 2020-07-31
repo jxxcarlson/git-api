@@ -143,7 +143,7 @@ update msg model =
 
         LocalFileContentDecoded fileOperation content ->
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
-            , createBlob2Cmd fileOperation
+            , createBlobCmd fileOperation
                 { authToken = model.authToken
                 , owner = model.owner
                 , repo = model.repo
@@ -322,8 +322,8 @@ getHeadRefCmd =
         (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
 
 
-createAndCommitFile : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
-createAndCommitFile fileOperation params =
+createAndCommitFile : { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
+createAndCommitFile params =
     Task.attempt GitHubFileCreated
         (Github.updateFileContents
             { authToken = params.authToken
@@ -338,12 +338,8 @@ createAndCommitFile fileOperation params =
         )
 
 
-initiateUpdateAndCommit : a -> { b | authToken : String, owner : String, repo : String, content : String } -> Cmd Msg
-initiateUpdateAndCommit fileOperation params =
-    let
-        _ =
-            Debug.log "@@@" "4: createBlobTask"
-    in
+initiateUpdateAndCommit : { b | authToken : String, owner : String, repo : String, content : String } -> Cmd Msg
+initiateUpdateAndCommit params =
     Task.attempt BlobReceived
         (Github.createBlob
             { authToken = params.authToken
@@ -370,14 +366,14 @@ getTreeCmd url =
         }
 
 
-createBlob2Cmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
-createBlob2Cmd fileOperation params =
+createBlobCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
+createBlobCmd fileOperation params =
     case fileOperation of
         FCreate ->
-            createAndCommitFile fileOperation params
+            createAndCommitFile params
 
         FUpdate ->
-            initiateUpdateAndCommit fileOperation params
+            initiateUpdateAndCommit params
 
 
 getCommitInfoCmd : String -> String -> String -> Cmd Msg
