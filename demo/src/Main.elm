@@ -134,7 +134,7 @@ update msg model =
 
         GetHeadRef ->
             ( model
-            , getHeadRefTask
+            , getHeadRefCmd
             )
 
         GotHeadRef result ->
@@ -145,7 +145,7 @@ update msg model =
                         , headUrl = Debug.log "head, url" data.url
                         , content = "sha: " ++ data.sha ++ ", data: " ++ data.sha ++ "\nurl: " ++ data.url
                       }
-                    , getCommitInfoTask model.owner model.repo data.sha
+                    , getCommitInfoCmd model.owner model.repo data.sha
                     )
 
                 Err err ->
@@ -164,7 +164,7 @@ update msg model =
                         , tree_sha = data.tree_sha
                         , tree_url = data.tree_url
                       }
-                    , getTree data.tree_url
+                    , getTreeCmd data.tree_url
                     )
 
                 Err err ->
@@ -180,12 +180,12 @@ update msg model =
                     ( { model | output = Debug.toString errMsg }, Cmd.none )
 
                 Ok data ->
-                    ( { model | file_sha = data.sha }, getHeadRefTask )
+                    ( { model | file_sha = data.sha }, getHeadRefCmd )
 
         CreateBlob ->
             -- TODO: check out sha field
             ( model
-            , createBlob FCreate
+            , createBlob2Cmd FCreate
                 { authToken = model.authToken
                 , owner = model.owner
                 , repo = model.repo
@@ -247,7 +247,7 @@ update msg model =
             in
             -- TODO checkout sha field
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
-            , createBlob fileOperation
+            , createBlob2Cmd fileOperation
                 { authToken = model.authToken
                 , owner = model.owner
                 , repo = model.repo
@@ -264,7 +264,7 @@ update msg model =
                 _ =
                     Debug.log "GotTree" sha
             in
-            ( model, createTreeTask model )
+            ( model, createTreeCmd model )
 
         TreeCreated result ->
             let
@@ -274,7 +274,7 @@ update msg model =
             case result of
                 Ok reply ->
                     ( { model | new_tree_sha = Debug.log "@@! TreeCreated, new_tree_sha" reply.sha }
-                    , createCommitTask model reply.sha
+                    , createCommitCmd model reply.sha
                     )
 
                 Err err ->
@@ -287,7 +287,7 @@ update msg model =
             in
             case result of
                 Ok reply ->
-                    ( { model | new_commit_sha = reply.sha }, updateRefTask model reply.sha )
+                    ( { model | new_commit_sha = reply.sha }, updateRefCmd model reply.sha )
 
                 Err err ->
                     ( { model | output = Debug.toString err }, Cmd.none )
@@ -306,10 +306,11 @@ update msg model =
 
 
 
--- TASKS
+-- Cmds
 
 
-updateRefTask model newCommitSha =
+updateRefCmd : { a | authToken : String, owner : String, repo : String, branch : String } -> String -> Cmd Msg
+updateRefCmd model newCommitSha =
     let
         _ =
             Debug.log "@@@" ("10: updateRefTask:: " ++ newCommitSha)
@@ -326,7 +327,8 @@ updateRefTask model newCommitSha =
         )
 
 
-createCommitTask model new_tree_sha =
+createCommitCmd : { a | authToken : String, owner : String, repo : String, commit_message : String, headSha : String } -> String -> Cmd Msg
+createCommitCmd model new_tree_sha =
     let
         _ =
             Debug.log "@@@" "9: createCommitTask"
@@ -346,7 +348,8 @@ createCommitTask model new_tree_sha =
         )
 
 
-createTreeTask model =
+createTreeCmd : { a | authToken : String, owner : String, repo : String, tree_sha : String, file_sha : String, fileName : String } -> Cmd Msg
+createTreeCmd model =
     let
         _ =
             Debug.log "@@@" "8: createTreeTask"
@@ -363,7 +366,8 @@ createTreeTask model =
         )
 
 
-getHeadRefTask =
+getHeadRefCmd : Cmd Msg
+getHeadRefCmd =
     let
         _ =
             Debug.log "@@@" "5: getHeadRefTask"
@@ -372,7 +376,8 @@ getHeadRefTask =
         (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
 
 
-createFileTask fileOperation params =
+createFileCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
+createFileCmd fileOperation params =
     Task.attempt (GitHubFileCreated fileOperation)
         (Github.updateFileContents
             { authToken = params.authToken
@@ -387,7 +392,8 @@ createFileTask fileOperation params =
         )
 
 
-createBlobTask fileOperation params =
+createBlobCmd : a -> { b | authToken : String, owner : String, repo : String, content : String } -> Cmd Msg
+createBlobCmd fileOperation params =
     let
         _ =
             Debug.log "@@@" "4: createBlobTask"
@@ -406,8 +412,8 @@ createBlobTask fileOperation params =
 -- HELPERS
 
 
-getTree : String -> Cmd Msg
-getTree url =
+getTreeCmd : String -> Cmd Msg
+getTreeCmd url =
     let
         _ =
             Debug.log "@@@" "7: getTree"
@@ -418,7 +424,8 @@ getTree url =
         }
 
 
-createBlob fileOperation params =
+createBlob2Cmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
+createBlob2Cmd fileOperation params =
     let
         sha =
             Debug.log "createBlob, sha"
@@ -433,13 +440,14 @@ createBlob fileOperation params =
     in
     case fileOperation of
         FCreate ->
-            createFileTask fileOperation params
+            createFileCmd fileOperation params
 
         FUpdate ->
-            createBlobTask fileOperation params
+            createBlobCmd fileOperation params
 
 
-getCommitInfoTask owner repo sha =
+getCommitInfoCmd : String -> String -> String -> Cmd Msg
+getCommitInfoCmd owner repo sha =
     let
         _ =
             Debug.log "@@@" "6: getCommitInfoTask"
