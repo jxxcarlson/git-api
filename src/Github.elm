@@ -5,7 +5,7 @@ module Github exposing
     , getFileContents, updateFileContents
     , getHeadRef, getCommitInfo
     , getComments, createComment
-    , createBlob, getBlob
+    , createBlob, createTree, getBlob
     )
 
 {-|
@@ -509,22 +509,19 @@ updateFileContents params =
 
 
 createTree :
-    { owner : String
+    { authToken : String
+    , owner : String
     , repo : String
     , tree_sha : String
     , file_sha : String
     , path : String
     }
-    ->
-        Task Http.Error
-            { tree_sha : String
-            , tree_url : String
-            , commit_sha : String
-            }
+    -> Task Http.Error { sha : String }
 createTree params =
     let
-        --  "tree": [ ]
-        -- encodeInner : { path : String, f_sha : String }
+        _ =
+            Debug.log "MAKE TREE @" params.tree_sha
+
         encodeInner p =
             Json.Encode.object
                 [ ( "path", Json.Encode.string p.path )
@@ -534,21 +531,14 @@ createTree params =
                 ]
 
         decoder =
-            Json.Decode.map3
-                (\tree_sha tree_url commit_sha ->
-                    { tree_sha = tree_sha
-                    , tree_url = tree_url
-                    , commit_sha = commit_sha
-                    }
-                )
-                (Json.Decode.at [ "tree", "sha" ] Json.Decode.string)
-                (Json.Decode.at [ "tree", "url" ] Json.Decode.string)
+            Json.Decode.map
+                (\sha_ -> { sha = sha_ })
                 (Json.Decode.at [ "sha" ] Json.Decode.string)
     in
     Http.task
         { method = "POST"
-        , headers = []
-        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/trees/" ++ params.tree_sha
+        , headers = [ Http.header "Authorization" ("token " ++ params.authToken) ]
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/trees"
         , body =
             Http.jsonBody
                 (Json.Encode.object

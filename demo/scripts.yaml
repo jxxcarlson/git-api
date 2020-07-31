@@ -1,6 +1,6 @@
 scripts:
     make: elm make src/Main.elm
-    
+
     live:
       cmd:
         pll:

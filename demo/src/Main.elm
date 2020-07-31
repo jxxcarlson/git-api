@@ -17,6 +17,7 @@ import File.Select as Select
 import Github
 import Html exposing (Html)
 import Http
+import Json.Decode
 import SHA1
 import Task
 
@@ -43,6 +44,7 @@ type alias Model =
     , commit_sha : String
     , tree_sha : String
     , tree_url : String
+    , new_tree_sha : String
     , message : String
     , output : String
     }
@@ -67,6 +69,8 @@ type Msg
     | GetHeadRef
     | GotHeadRef (Result Http.Error { sha : String, url : String })
     | GotCommitInfo (Result Http.Error { commit_sha : String, tree_sha : String, tree_url : String })
+    | GotTree (Result Http.Error String)
+    | TreeCreated (Result Http.Error { sha : String })
 
 
 type FileOperation
@@ -91,6 +95,7 @@ init flags =
       , commit_sha = ""
       , tree_sha = ""
       , tree_url = ""
+      , new_tree_sha = ""
       , message = "No message for now"
       , fileName = ""
       , content = ""
@@ -249,12 +254,44 @@ update msg model =
                 }
             )
 
+        GotTree sha ->
+            let
+                _ =
+                    Debug.log "GotTree" sha
+            in
+            ( model, makeTreeTask model )
+
+        TreeCreated result ->
+            let
+                _ =
+                    Debug.log "MAKE NEW TREE"
+            in
+            case result of
+                Ok reply ->
+                    ( { model | new_tree_sha = reply.sha }, Cmd.none )
+
+                Err err ->
+                    ( { model | output = Debug.toString err }, Cmd.none )
+
+
+makeTreeTask model =
+    Task.attempt TreeCreated
+        (Github.createTree
+            { authToken = model.authToken
+            , owner = model.owner
+            , repo = model.repo
+            , tree_sha = model.tree_sha
+            , file_sha = model.file_sha
+            , path = model.fileName
+            }
+        )
+
 
 getTree : String -> Cmd Msg
 getTree url =
     Http.get
         { url = url
-        , expect = Http.expectString GotTree
+        , expect = Http.expectJson GotTree (Json.Decode.field "sha" Json.Decode.string)
         }
 
 
