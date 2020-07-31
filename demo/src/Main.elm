@@ -163,8 +163,7 @@ update msg model =
                         , tree_sha = data.tree_sha
                         , tree_url = data.tree_url
                       }
-                    , Cmd.none
-                      -- TODO tree opd
+                    , getTree data.tree_url
                     )
 
                 Err err ->
@@ -249,6 +248,14 @@ update msg model =
                 , content = content
                 }
             )
+
+
+getTree : String -> Cmd Msg
+getTree url =
+    Http.get
+        { url = url
+        , expect = Http.expectString GotTree
+        }
 
 
 

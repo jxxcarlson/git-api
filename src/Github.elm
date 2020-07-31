@@ -508,6 +508,59 @@ updateFileContents params =
         }
 
 
+createTree :
+    { owner : String
+    , repo : String
+    , tree_sha : String
+    , file_sha : String
+    , path : String
+    }
+    ->
+        Task Http.Error
+            { tree_sha : String
+            , tree_url : String
+            , commit_sha : String
+            }
+createTree params =
+    let
+        --  "tree": [ ]
+        -- encodeInner : { path : String, f_sha : String }
+        encodeInner p =
+            Json.Encode.object
+                [ ( "path", Json.Encode.string p.path )
+                , ( "mode", Json.Encode.string "100644" )
+                , ( "type", Json.Encode.string "blob" )
+                , ( "sha", Json.Encode.string p.file_sha )
+                ]
+
+        decoder =
+            Json.Decode.map3
+                (\tree_sha tree_url commit_sha ->
+                    { tree_sha = tree_sha
+                    , tree_url = tree_url
+                    , commit_sha = commit_sha
+                    }
+                )
+                (Json.Decode.at [ "tree", "sha" ] Json.Decode.string)
+                (Json.Decode.at [ "tree", "url" ] Json.Decode.string)
+                (Json.Decode.at [ "sha" ] Json.Decode.string)
+    in
+    Http.task
+        { method = "POST"
+        , headers = []
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/trees/" ++ params.tree_sha
+        , body =
+            Http.jsonBody
+                (Json.Encode.object
+                    [ ( "base_tree", Json.Encode.string params.tree_sha )
+                    , ( "tree", Json.Encode.list encodeInner [ { path = params.path, file_sha = params.file_sha } ] )
+                    ]
+                )
+        , resolver = jsonResolver decoder
+        , timeout = Nothing
+        }
+
+
 {-| See <https://developer.github.com/v3/issues/comments/#list-comments-on-an-issue>
 
 NOTE: Not all input options and output fields are supported yet. Pull requests adding more complete support are welcome.
