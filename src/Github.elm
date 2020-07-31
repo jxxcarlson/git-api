@@ -577,7 +577,7 @@ updateRef params =
     Http.task
         { method = "PATCH"
         , headers = [ Http.header "Authorization" ("token " ++ params.authToken) ]
-        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/refs/" ++ params.branch ++ "/HEAD"
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/git/refs/heads/master" -- ++ params.branch ++ "/HEAD"
         , body =
             Http.jsonBody
                 (Json.Encode.object
