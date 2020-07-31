@@ -389,9 +389,10 @@ getFileContents params =
 {-| <https://api.github.com/repos/jxxcarlson/minilatex-docs/git/refs/heads/master>
 -}
 getHeadRef :
-    { owner : String
-    , repo : String
-    , branch : String
+    { a
+        | owner : String
+        , repo : String
+        , branch : String
     }
     ->
         Task Http.Error
@@ -421,9 +422,10 @@ getHeadRef params =
 
 
 getCommitInfo :
-    { owner : String
-    , repo : String
-    , sha : String
+    { a
+        | owner : String
+        , repo : String
+        , sha : String
     }
     ->
         Task Http.Error
@@ -710,3 +712,143 @@ jsonResolver decoder =
 
                 Http.BadStatus_ metadata _ ->
                     Err (Http.BadStatus metadata.statusCode)
+
+
+type alias UpdateAndCommitRecord =
+    { authToken : String
+    , owner : String
+    , repo : String
+    , branch : String
+    , content : String
+    , fileSha : String
+    , fileName : String
+    , commitMessage : String
+    , headSha : String
+    , headUrl : String
+    , commitSha : String
+    , treeSha : String
+    , treeUrl : String
+    , newTreeSha : String
+    , newCommitSha : String
+    , updatedRefSha : String
+    }
+
+
+emptyUpdateAndCommitRecord : UpdateAndCommitRecord
+emptyUpdateAndCommitRecord =
+    { authToken = ""
+    , owner = ""
+    , repo = ""
+    , branch = "master"
+    , content = ""
+    , fileSha = ""
+    , fileName = ""
+    , commitMessage = ""
+    , headSha = ""
+    , headUrl = ""
+    , commitSha = ""
+    , treeSha = ""
+    , treeUrl = ""
+    , newTreeSha = ""
+    , newCommitSha = ""
+    , updatedRefSha = ""
+    }
+
+
+
+-- ggupdateAndCommit : UpdateAndCommitRecord -> Task Http.Error { sha : String, url : String }
+
+
+updateAndCommit : String -> String -> String -> String -> Task Http.Error UpdateAndCommitRecord
+updateAndCommit authToken owner repo content =
+    let
+        params =
+            { emptyUpdateAndCommitRecord | authToken = authToken, owner = owner, repo = repo, content = content }
+    in
+    createBlob { authToken = params.authToken, owner = params.owner, repo = params.repo, content = params.content }
+        |> Task.andThen
+            (\_ ->
+                getHeadRef { owner = params.owner, repo = params.repo, branch = params.branch }
+                    |> Task.map (\x -> { params | headSha = x.sha, headUrl = x.url })
+            )
+        |> Task.andThen
+            (\output ->
+                getCommitInfo { owner = params.owner, repo = params.repo, sha = output.headSha }
+                    |> Task.map (\x -> { output | treeUrl = x.tree_url, commitSha = x.commit_sha, treeSha = x.tree_sha })
+            )
+        |> Task.andThen
+            (\output ->
+                getUrl { url = output.treeUrl }
+                    |> Task.map (\x -> { output | newTreeSha = x.sha })
+            )
+        |> Task.andThen
+            (\output ->
+                createTree
+                    { authToken = params.authToken
+                    , owner = params.owner
+                    , repo = params.repo
+                    , tree_sha = output.treeSha
+                    , file_sha = output.fileSha -- TODO check
+                    , path = output.fileName -- TODO check
+                    }
+                    |> Task.map (\x -> { output | newTreeSha = x.sha })
+            )
+        |> Task.andThen
+            (\output ->
+                createCommit
+                    { authToken = params.authToken
+                    , owner = params.owner
+                    , repo = params.repo
+                    , message = params.commitMessage
+                    , tree = output.newTreeSha
+                    , parents = [ output.headSha ]
+                    }
+                    |> Task.map (\x -> { output | newCommitSha = x.sha })
+            )
+        |> Task.andThen
+            (\output ->
+                updateRef
+                    { authToken = params.authToken
+                    , owner = params.owner
+                    , repo = params.repo
+                    , branch = params.branch
+                    , force = True
+                    , sha = output.newCommitSha
+                    }
+                    |> Task.map (\x -> { output | updatedRefSha = x.sha })
+            )
+
+
+
+--|> Task.andThen
+--   (\output -> getTree )
+-- |> Task.andThen (\data -> getCommitInfo { params | sha = data.shah, url = data.url })
+--- XXXX
+
+
+getUrl :
+    { a
+        | url : String
+    }
+    ->
+        Task Http.Error
+            { sha : String
+            }
+getUrl params =
+    let
+        decoder =
+            Json.Decode.map
+                (\sha ->
+                    { sha = sha
+                    }
+                )
+                (Json.Decode.at [ "sha" ] Json.Decode.string)
+    in
+    Http.task
+        { method = "GET"
+        , headers = []
+        , url = params.url
+        , body = Http.emptyBody
+        , resolver = jsonResolver decoder
+        , timeout = Nothing
+        }
