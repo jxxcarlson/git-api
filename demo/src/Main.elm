@@ -87,8 +87,8 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     ( { authToken = ""
       , output = ""
-      , owner = "jxxcarlson"
-      , repo = "minilatex-docs"
+      , owner = ""
+      , repo = ""
       , branch = "master"
       , message = ""
       , fileName = ""
