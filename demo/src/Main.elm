@@ -144,10 +144,6 @@ update msg model =
                     ( { model | output = reply.content.sha, file_sha = reply.content.sha }, Cmd.none )
 
         RefUpdated result ->
-            let
-                _ =
-                    Debug.log "11: End (RefUpdated)"
-            in
             case result of
                 Ok reply ->
                     ( { model | output = "REF: " ++ reply.sha }, Cmd.none )
@@ -157,7 +153,7 @@ update msg model =
 
 
 
--- Cmds
+-- HELPERS
 
 
 createAndCommitFile : { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
@@ -171,13 +167,9 @@ createAndCommitFile params =
             , path = params.path
             , sha = ""
             , message = params.message
-            , content = Debug.log "createBlob, content" params.content
+            , content = params.content
             }
         )
-
-
-
--- HELPERS
 
 
 createBlobCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg

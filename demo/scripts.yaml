@@ -1,9 +1,4 @@
 scripts:
-    make: elm make --debug src/Main.elm
+    make: elm make src/Main.elm
 
-    live:
-      cmd:
-        pll:
-          - elm-live -d public/ src/Main.elm -- --output index.html
-          - open -a /Applications/Google\ Chrome.app/  http://localhost:8001
-      desc: Run editor with Elm Live
+
