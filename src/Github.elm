@@ -755,21 +755,17 @@ emptyUpdateAndCommitRecord =
     }
 
 
-
--- ggupdateAndCommit : UpdateAndCommitRecord -> Task Http.Error { sha : String, url : String }
-
-
-updateAndCommit : String -> String -> String -> String -> Task Http.Error UpdateAndCommitRecord
-updateAndCommit authToken owner repo content =
+updateAndCommit : String -> String -> String -> String -> String -> Task Http.Error UpdateAndCommitRecord
+updateAndCommit authToken owner repo fileName content =
     let
         params =
-            { emptyUpdateAndCommitRecord | authToken = authToken, owner = owner, repo = repo, content = content }
+            { emptyUpdateAndCommitRecord | authToken = authToken, owner = owner, repo = repo, fileName = fileName, content = content }
     in
     createBlob { authToken = params.authToken, owner = params.owner, repo = params.repo, content = params.content }
         |> Task.andThen
-            (\_ ->
+            (\data ->
                 getHeadRef { owner = params.owner, repo = params.repo, branch = params.branch }
-                    |> Task.map (\x -> { params | headSha = x.sha, headUrl = x.url })
+                    |> Task.map (\x -> { params | fileSha = data.sha, headSha = x.sha, headUrl = x.url })
             )
         |> Task.andThen
             (\output ->
@@ -789,7 +785,7 @@ updateAndCommit authToken owner repo content =
                     , repo = params.repo
                     , tree_sha = output.treeSha
                     , file_sha = output.fileSha -- TODO check
-                    , path = output.fileName -- TODO check
+                    , path = params.fileName -- TODO check
                     }
                     |> Task.map (\x -> { output | newTreeSha = x.sha })
             )
@@ -817,13 +813,6 @@ updateAndCommit authToken owner repo content =
                     }
                     |> Task.map (\x -> { output | updatedRefSha = x.sha })
             )
-
-
-
---|> Task.andThen
---   (\output -> getTree )
--- |> Task.andThen (\data -> getCommitInfo { params | sha = data.shah, url = data.url })
---- XXXX
 
 
 getUrl :
