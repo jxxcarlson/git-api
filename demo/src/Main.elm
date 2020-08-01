@@ -180,9 +180,7 @@ createBlobCmd fileOperation params =
 
         FUpdate ->
             Task.attempt RefUpdated
-                (Github.updateAndCommit params.authToken params.owner params.repo params.path params.content
-                    |> Task.map (\x -> { sha = x.updatedRefSha })
-                )
+                (Github.updateAndCommit params.authToken params.owner params.repo params.path params.content)
 
 
 

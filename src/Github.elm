@@ -757,7 +757,7 @@ emptyUpdateAndCommitRecord =
     }
 
 
-updateAndCommit : String -> String -> String -> String -> String -> Task Http.Error UpdateAndCommitRecord
+updateAndCommit : String -> String -> String -> String -> String -> Task Http.Error { sha : String }
 updateAndCommit authToken owner repo fileName content =
     let
         params =
@@ -813,7 +813,6 @@ updateAndCommit authToken owner repo fileName content =
                     , force = True
                     , sha = output.newCommitSha
                     }
-                    |> Task.map (\x -> { output | updatedRefSha = x.sha })
             )
 
 
