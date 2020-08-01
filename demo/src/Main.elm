@@ -34,7 +34,6 @@ main =
 type alias Model =
     { content : String
     , authToken : String
-    , file_sha : String
     , owner : String
     , repo : String
     , branch : String
@@ -53,7 +52,6 @@ type Msg
     = NoOp
       -- INPUT
     | InputAccessToken String
-    | InputSha String
     | InputOwner String
     | InputRepo String
       -- FILE
@@ -78,7 +76,6 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     ( { authToken = ""
       , output = ""
-      , file_sha = ""
       , owner = "jxxcarlson"
       , repo = "minilatex-docs"
       , branch = "master"
@@ -104,9 +101,6 @@ update msg model =
         -- INPUT
         InputAccessToken str ->
             ( { model | authToken = str }, Cmd.none )
-
-        InputSha str ->
-            ( { model | file_sha = str }, Cmd.none )
 
         InputOwner str ->
             ( { model | owner = str }, Cmd.none )
@@ -141,7 +135,7 @@ update msg model =
                     ( { model | output = Debug.toString errMsg }, Cmd.none )
 
                 Ok reply ->
-                    ( { model | output = reply.content.sha, file_sha = reply.content.sha }, Cmd.none )
+                    ( { model | output = reply.content.sha }, Cmd.none )
 
         RefUpdated result ->
             case result of
@@ -200,7 +194,6 @@ mainColumn model =
         [ column [ padding 40, spacing 20, width (px 600), height (px 600) ]
             [ title "GitHub API"
             , inputAccessToken model
-            , inputSha model
             , inputOwner model
             , inputRepo model
             , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton ]
@@ -236,16 +229,6 @@ inputAccessToken model =
         { onChange = InputAccessToken
         , text = model.authToken
         , placeholder = Just (Input.placeholder [] (el [] (text "access token")))
-        , label = Input.labelLeft [] <| el [] (text "")
-        }
-
-
-inputSha : Model -> Element Msg
-inputSha model =
-    Input.text []
-        { onChange = InputSha
-        , text = model.file_sha
-        , placeholder = Just (Input.placeholder [] (el [] (text "sha")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
 
