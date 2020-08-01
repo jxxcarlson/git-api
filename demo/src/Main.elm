@@ -140,10 +140,10 @@ update msg model =
         RefUpdated result ->
             case result of
                 Ok reply ->
-                    ( { model | output = "REF: " ++ reply.sha }, Cmd.none )
+                    ( { model | output = reply.sha }, Cmd.none )
 
                 Err err ->
-                    ( { model | output = "!!!!" ++ Debug.toString err }, Cmd.none )
+                    ( { model | output = Debug.toString err }, Cmd.none )
 
 
 
