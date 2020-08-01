@@ -174,7 +174,14 @@ createBlobCmd fileOperation params =
 
         FUpdate ->
             Task.attempt RefUpdated
-                (Github.updateAndCommit params.authToken params.owner params.repo params.path params.content)
+                (Github.updateAndCommit
+                    { authToken = params.authToken
+                    , owner = params.owner
+                    , repo = params.repo
+                    , fileName = params.path
+                    , content = params.content
+                    }
+                )
 
 
 

@@ -757,11 +757,21 @@ emptyUpdateAndCommitRecord =
     }
 
 
-updateAndCommit : String -> String -> String -> String -> String -> Task Http.Error { sha : String }
-updateAndCommit authToken owner repo fileName content =
+type alias UpdateAndCommitParams =
+    { authToken : String, owner : String, repo : String, fileName : String, content : String }
+
+
+updateAndCommit : UpdateAndCommitParams -> Task Http.Error { sha : String }
+updateAndCommit inputParams =
     let
         params =
-            { emptyUpdateAndCommitRecord | authToken = authToken, owner = owner, repo = repo, fileName = fileName, content = content }
+            { emptyUpdateAndCommitRecord
+                | authToken = inputParams.authToken
+                , owner = inputParams.owner
+                , repo = inputParams.repo
+                , fileName = inputParams.fileName
+                , content = inputParams.content
+            }
     in
     createBlob { authToken = params.authToken, owner = params.owner, repo = params.repo, content = params.content }
         |> Task.andThen
