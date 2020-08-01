@@ -1,9 +1,21 @@
 module Main exposing (main)
 
-{- This is a starter app which presents a text label, text field, and a button.
-   What you enter in the text field is echoed in the label.  When you press the
-   button, the text in the label is reverse.
-   This version uses `mdgriffith/elm-ui` for the view functions.
+{- This app show how one can use the package avh4/elm-github-v3 to
+   add files to a github repo, then update them as needed along with
+   a commit message.  The app has two buttons "Create file" and "Update file,"
+   both of which bring up file browser to choose a file to be added to the
+   repository or to be updated.
+
+   You can view the latest version of the file this way:
+
+        https://github.com/:owner/:repo/blob/master/:filename
+
+   The segment :filename should be understood as :path.  While this app
+   is set up to use the master branch, that can also be set by the user.
+
+   To use the app, you will need an `authToken`.  This can be a personal
+   access tokn or an OAuth token: go to your Github page, to Settings, choose
+   Developer Settings, and you wll find it.
 -}
 
 import Base64
@@ -17,7 +29,6 @@ import File.Select as Select
 import Github
 import Html exposing (Html)
 import Http
-import Json.Decode
 import SHA1
 import Task
 
@@ -117,6 +128,7 @@ update msg model =
         LocalFileLoaded fileOperation file ->
             ( { model | fileName = File.name file }, Task.perform (LocalFileContentDecoded fileOperation) (File.toString file) )
 
+        -- REPO
         LocalFileContentDecoded fileOperation content ->
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
             , createBlobCmd fileOperation
@@ -188,9 +200,7 @@ createBlobCmd fileOperation params =
 
 
 
---
 -- VIEW
---
 
 
 view : Model -> Html Msg

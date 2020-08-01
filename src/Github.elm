@@ -4,7 +4,7 @@ module Github exposing
     , PullRequest, getPullRequests, getPullRequest, createPullRequest
     , getFileContents, updateFileContents
     , getHeadRef, getCommitInfo
-    , updateAndCommit
+    , updateAndCommit, UpdateAndCommitParams
     , getComments, createComment
     , createBlob, createTree, getBlob, updateRef
     )
@@ -16,7 +16,7 @@ module Github exposing
 @docs PullRequest, getPullRequests, getPullRequest, createPullRequest
 @docs getFileContents, updateFileContents
 @docs getHeadRef, getCommitInfo
-@docs updateAndCommit
+@docs updateAndCommit, UpdateAndCommitParams
 
 
 ## Issues
@@ -716,6 +716,39 @@ jsonResolver decoder =
                     Err (Http.BadStatus metadata.statusCode)
 
 
+{-| Helper function for updateAndCommit
+-}
+getUrl :
+    { a
+        | url : String
+    }
+    ->
+        Task Http.Error
+            { sha : String
+            }
+getUrl params =
+    let
+        decoder =
+            Json.Decode.map
+                (\sha ->
+                    { sha = sha
+                    }
+                )
+                (Json.Decode.at [ "sha" ] Json.Decode.string)
+    in
+    Http.task
+        { method = "GET"
+        , headers = []
+        , url = params.url
+        , body = Http.emptyBody
+        , resolver = jsonResolver decoder
+        , timeout = Nothing
+        }
+
+
+{-| Used internally by updateAndCommit to transmit
+information down the task pipeline.
+-}
 type alias UpdateAndCommitRecord =
     { authToken : String
     , owner : String
@@ -736,8 +769,10 @@ type alias UpdateAndCommitRecord =
     }
 
 
-emptyUpdateAndCommitRecord : UpdateAndCommitRecord
-emptyUpdateAndCommitRecord =
+{-| Initial state for the information transmitted down the task pipeline
+-}
+initialUpdateAndCommitRecord : UpdateAndCommitRecord
+initialUpdateAndCommitRecord =
     { authToken = ""
     , owner = ""
     , repo = ""
@@ -757,6 +792,8 @@ emptyUpdateAndCommitRecord =
     }
 
 
+{-| The information needed to update a file and commit it on Github
+-}
 type alias UpdateAndCommitParams =
     { authToken : String
     , owner : String
@@ -767,17 +804,26 @@ type alias UpdateAndCommitParams =
     }
 
 
+{-| Use the UpdateAndCommitParams to commit an update to an existing file.
+
+You can view the latest version of the file committed this way:
+
+        https://github.com/:owner/:repo/blob/master/:filename
+
+The segment :filename should be understood as :path.
+
+-}
 updateAndCommit : UpdateAndCommitParams -> Task Http.Error { sha : String }
-updateAndCommit inputParams =
+updateAndCommit updateAndCommitParams =
     let
         params =
-            { emptyUpdateAndCommitRecord
-                | authToken = inputParams.authToken
-                , owner = inputParams.owner
-                , repo = inputParams.repo
-                , fileName = inputParams.fileName
-                , content = inputParams.content
-                , message = inputParams.message
+            { initialUpdateAndCommitRecord
+                | authToken = updateAndCommitParams.authToken
+                , owner = updateAndCommitParams.owner
+                , repo = updateAndCommitParams.repo
+                , fileName = updateAndCommitParams.fileName
+                , content = updateAndCommitParams.content
+                , message = updateAndCommitParams.message
             }
     in
     createBlob { authToken = params.authToken, owner = params.owner, repo = params.repo, content = params.content }
@@ -831,31 +877,3 @@ updateAndCommit inputParams =
                     , sha = output.newCommitSha
                     }
             )
-
-
-getUrl :
-    { a
-        | url : String
-    }
-    ->
-        Task Http.Error
-            { sha : String
-            }
-getUrl params =
-    let
-        decoder =
-            Json.Decode.map
-                (\sha ->
-                    { sha = sha
-                    }
-                )
-                (Json.Decode.at [ "sha" ] Json.Decode.string)
-    in
-    Http.task
-        { method = "GET"
-        , headers = []
-        , url = params.url
-        , body = Http.emptyBody
-        , resolver = jsonResolver decoder
-        , timeout = Nothing
-        }
