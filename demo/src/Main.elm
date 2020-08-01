@@ -373,7 +373,12 @@ createBlobCmd fileOperation params =
             createAndCommitFile params
 
         FUpdate ->
-            initiateUpdateAndCommit params
+            -- initiateUpdateAndCommit params
+            Task.attempt RefUpdated
+                -- authToken owner repo fileName content
+                (Github.updateAndCommit params.authToken params.owner params.repo params.path params.content
+                    |> Task.map (\x -> { sha = x.updatedRefSha })
+                )
 
 
 getCommitInfoCmd : String -> String -> String -> Cmd Msg

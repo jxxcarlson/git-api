@@ -4,6 +4,7 @@ module Github exposing
     , PullRequest, getPullRequests, getPullRequest, createPullRequest
     , getFileContents, updateFileContents
     , getHeadRef, getCommitInfo
+    , updateAndCommit
     , getComments, createComment
     , createBlob, createTree, getBlob, updateRef
     )
@@ -15,6 +16,7 @@ module Github exposing
 @docs PullRequest, getPullRequests, getPullRequest, createPullRequest
 @docs getFileContents, updateFileContents
 @docs getHeadRef, getCommitInfo
+@docs updateAndCommit
 
 
 ## Issues
