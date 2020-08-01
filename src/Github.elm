@@ -786,8 +786,8 @@ updateAndCommit authToken owner repo fileName content =
                     , owner = params.owner
                     , repo = params.repo
                     , tree_sha = output.treeSha
-                    , file_sha = output.fileSha -- TODO check
-                    , path = params.fileName -- TODO check
+                    , file_sha = output.fileSha
+                    , path = params.fileName
                     }
                     |> Task.map (\x -> { output | newTreeSha = x.sha })
             )

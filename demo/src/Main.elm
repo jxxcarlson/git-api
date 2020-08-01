@@ -38,15 +38,8 @@ type alias Model =
     , owner : String
     , repo : String
     , branch : String
-    , fileName : String
-    , headSha : String
-    , headUrl : String
-    , commit_sha : String
-    , tree_sha : String
-    , tree_url : String
-    , new_tree_sha : String
-    , new_commit_sha : String
     , commit_message : String
+    , fileName : String
     , message : String
     , output : String
     }
@@ -69,12 +62,6 @@ type Msg
     | LocalFileContentDecoded FileOperation String
       -- REPO
     | GitHubFileCreated (Result Http.Error { content : { sha : String } })
-    | BlobReceived (Result Http.Error { sha : String })
-    | GotHeadRef (Result Http.Error { sha : String, url : String })
-    | GotCommitInfo (Result Http.Error { commit_sha : String, tree_sha : String, tree_url : String })
-    | GotTree (Result Http.Error String)
-    | TreeCreated (Result Http.Error { sha : String })
-    | NewCommitCreated (Result Http.Error { sha : String })
     | RefUpdated (Result Http.Error { sha : String })
 
 
@@ -95,13 +82,6 @@ init flags =
       , owner = "jxxcarlson"
       , repo = "minilatex-docs"
       , branch = "master"
-      , headSha = ""
-      , headUrl = ""
-      , commit_sha = ""
-      , tree_sha = ""
-      , tree_url = ""
-      , new_tree_sha = ""
-      , new_commit_sha = ""
       , commit_message = "This is a test"
       , message = "No message for now"
       , fileName = ""
@@ -155,52 +135,6 @@ update msg model =
                 }
             )
 
-        -- COMMIT CHANGE
-        GotHeadRef result ->
-            case result of
-                Ok data ->
-                    ( { model
-                        | headSha = Debug.log "head, sha" data.sha
-                        , headUrl = Debug.log "head, url" data.url
-                        , content = "sha: " ++ data.sha ++ ", data: " ++ data.sha ++ "\nurl: " ++ data.url
-                      }
-                    , getCommitInfoCmd model.owner model.repo data.sha
-                    )
-
-                Err err ->
-                    ( { model | output = Debug.toString err }, Cmd.none )
-
-        GotCommitInfo result ->
-            case result of
-                Ok data ->
-                    let
-                        _ =
-                            Debug.log "GotCommitInfo" data
-                    in
-                    -- TODO createBlob
-                    ( { model
-                        | commit_sha = data.commit_sha
-                        , tree_sha = data.tree_sha
-                        , tree_url = data.tree_url
-                      }
-                    , getTreeCmd data.tree_url
-                    )
-
-                Err err ->
-                    ( { model | output = Debug.toString err }, Cmd.none )
-
-        BlobReceived result ->
-            let
-                _ =
-                    Debug.log "BlobReceived" result
-            in
-            case result of
-                Err errMsg ->
-                    ( { model | output = Debug.toString errMsg }, Cmd.none )
-
-                Ok data ->
-                    ( { model | file_sha = data.sha }, getHeadRefCmd )
-
         GitHubFileCreated result ->
             case result of
                 Err errMsg ->
@@ -208,39 +142,6 @@ update msg model =
 
                 Ok reply ->
                     ( { model | output = reply.content.sha, file_sha = reply.content.sha }, Cmd.none )
-
-        GotTree sha ->
-            let
-                _ =
-                    Debug.log "GotTree" sha
-            in
-            ( model, createTreeCmd model )
-
-        TreeCreated result ->
-            let
-                _ =
-                    Debug.log "MAKE NEW TREE"
-            in
-            case result of
-                Ok reply ->
-                    ( { model | new_tree_sha = Debug.log "@@! TreeCreated, new_tree_sha" reply.sha }
-                    , createCommitCmd model reply.sha
-                    )
-
-                Err err ->
-                    ( { model | output = Debug.toString err }, Cmd.none )
-
-        NewCommitCreated result ->
-            let
-                _ =
-                    Debug.log "@@! NewCommitCreated" result
-            in
-            case result of
-                Ok reply ->
-                    ( { model | new_commit_sha = reply.sha }, updateRefCmd model reply.sha )
-
-                Err err ->
-                    ( { model | output = Debug.toString err }, Cmd.none )
 
         RefUpdated result ->
             let
@@ -259,69 +160,6 @@ update msg model =
 -- Cmds
 
 
-updateRefCmd : { a | authToken : String, owner : String, repo : String, branch : String } -> String -> Cmd Msg
-updateRefCmd model newCommitSha =
-    Task.attempt RefUpdated
-        (Github.updateRef
-            { authToken = model.authToken
-            , owner = model.owner
-            , repo = model.repo
-            , branch = model.branch
-            , force = True
-            , sha = newCommitSha
-            }
-        )
-
-
-createCommitCmd : { a | authToken : String, owner : String, repo : String, commit_message : String, headSha : String } -> String -> Cmd Msg
-createCommitCmd model new_tree_sha =
-    let
-        _ =
-            Debug.log "@@@" "9: createCommitTask"
-
-        _ =
-            Debug.log "@@! new_tree_sha" new_tree_sha
-    in
-    Task.attempt NewCommitCreated
-        (Github.createCommit
-            { authToken = model.authToken
-            , owner = model.owner
-            , repo = model.repo
-            , message = Debug.log "@@! MESS" model.commit_message
-            , tree = Debug.log "@@! NTSH" new_tree_sha
-            , parents = Debug.log "@@! PARENTS" [ model.headSha ]
-            }
-        )
-
-
-createTreeCmd : { a | authToken : String, owner : String, repo : String, tree_sha : String, file_sha : String, fileName : String } -> Cmd Msg
-createTreeCmd model =
-    let
-        _ =
-            Debug.log "@@@" "8: createTreeTask"
-    in
-    Task.attempt TreeCreated
-        (Github.createTree
-            { authToken = model.authToken
-            , owner = model.owner
-            , repo = model.repo
-            , tree_sha = model.tree_sha
-            , file_sha = model.file_sha
-            , path = model.fileName
-            }
-        )
-
-
-getHeadRefCmd : Cmd Msg
-getHeadRefCmd =
-    let
-        _ =
-            Debug.log "@@@" "5: getHeadRefTask"
-    in
-    Task.attempt GotHeadRef
-        (Github.getHeadRef { owner = "jxxcarlson", repo = "minilatex-docs", branch = "master" })
-
-
 createAndCommitFile : { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
 createAndCommitFile params =
     Task.attempt GitHubFileCreated
@@ -338,32 +176,8 @@ createAndCommitFile params =
         )
 
 
-initiateUpdateAndCommit : { b | authToken : String, owner : String, repo : String, content : String } -> Cmd Msg
-initiateUpdateAndCommit params =
-    Task.attempt BlobReceived
-        (Github.createBlob
-            { authToken = params.authToken
-            , owner = params.owner
-            , repo = params.repo
-            , content = Debug.log "createBlob, content" params.content
-            }
-        )
-
-
 
 -- HELPERS
-
-
-getTreeCmd : String -> Cmd Msg
-getTreeCmd url =
-    let
-        _ =
-            Debug.log "@@@" "7: getTree"
-    in
-    Http.get
-        { url = url
-        , expect = Http.expectJson GotTree (Json.Decode.field "sha" Json.Decode.string)
-        }
 
 
 createBlobCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
@@ -373,27 +187,10 @@ createBlobCmd fileOperation params =
             createAndCommitFile params
 
         FUpdate ->
-            -- initiateUpdateAndCommit params
             Task.attempt RefUpdated
-                -- authToken owner repo fileName content
                 (Github.updateAndCommit params.authToken params.owner params.repo params.path params.content
                     |> Task.map (\x -> { sha = x.updatedRefSha })
                 )
-
-
-getCommitInfoCmd : String -> String -> String -> Cmd Msg
-getCommitInfoCmd owner repo sha =
-    let
-        _ =
-            Debug.log "@@@" "6: getCommitInfoTask"
-    in
-    Task.attempt GotCommitInfo
-        (Github.getCommitInfo
-            { owner = owner
-            , repo = repo
-            , sha = sha
-            }
-        )
 
 
 
@@ -504,9 +301,7 @@ updateBlobButton =
 
 
 
---
 -- STYLE
---
 
 
 mainColumnStyle =
