@@ -37,7 +37,6 @@ type alias Model =
     , owner : String
     , repo : String
     , branch : String
-    , commit_message : String
     , fileName : String
     , message : String
     , output : String
@@ -54,6 +53,7 @@ type Msg
     | InputAccessToken String
     | InputOwner String
     | InputRepo String
+    | InputMessage String
       -- FILE
     | LocalFileRequested FileOperation
     | LocalFileLoaded FileOperation File
@@ -79,8 +79,7 @@ init flags =
       , owner = "jxxcarlson"
       , repo = "minilatex-docs"
       , branch = "master"
-      , commit_message = "This is a test"
-      , message = "No message for now"
+      , message = ""
       , fileName = ""
       , content = ""
       }
@@ -107,6 +106,9 @@ update msg model =
 
         InputRepo str ->
             ( { model | repo = str }, Cmd.none )
+
+        InputMessage str ->
+            ( { model | message = str }, Cmd.none )
 
         -- FILE
         LocalFileRequested fileOperation ->
@@ -180,6 +182,7 @@ createBlobCmd fileOperation params =
                     , repo = params.repo
                     , fileName = params.path
                     , content = params.content
+                    , message = params.message
                     }
                 )
 
@@ -203,6 +206,7 @@ mainColumn model =
             , inputAccessToken model
             , inputOwner model
             , inputRepo model
+            , inputMessage model
             , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton ]
             , el [ Font.size 14 ] (text ("sha: " ++ model.output))
             , outputDisplay model
@@ -256,6 +260,16 @@ inputRepo model =
         { onChange = InputRepo
         , text = model.repo
         , placeholder = Just (Input.placeholder [] (el [] (text "repo")))
+        , label = Input.labelLeft [] <| el [] (text "")
+        }
+
+
+inputMessage : Model -> Element Msg
+inputMessage model =
+    Input.text []
+        { onChange = InputMessage
+        , text = model.message
+        , placeholder = Just (Input.placeholder [] (el [] (text "commit message")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
 

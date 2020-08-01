@@ -724,7 +724,7 @@ type alias UpdateAndCommitRecord =
     , content : String
     , fileSha : String
     , fileName : String
-    , commitMessage : String
+    , message : String
     , headSha : String
     , headUrl : String
     , commitSha : String
@@ -745,7 +745,7 @@ emptyUpdateAndCommitRecord =
     , content = ""
     , fileSha = ""
     , fileName = ""
-    , commitMessage = ""
+    , message = ""
     , headSha = ""
     , headUrl = ""
     , commitSha = ""
@@ -758,7 +758,13 @@ emptyUpdateAndCommitRecord =
 
 
 type alias UpdateAndCommitParams =
-    { authToken : String, owner : String, repo : String, fileName : String, content : String }
+    { authToken : String
+    , owner : String
+    , repo : String
+    , fileName : String
+    , content : String
+    , message : String
+    }
 
 
 updateAndCommit : UpdateAndCommitParams -> Task Http.Error { sha : String }
@@ -771,6 +777,7 @@ updateAndCommit inputParams =
                 , repo = inputParams.repo
                 , fileName = inputParams.fileName
                 , content = inputParams.content
+                , message = inputParams.message
             }
     in
     createBlob { authToken = params.authToken, owner = params.owner, repo = params.repo, content = params.content }
@@ -807,7 +814,7 @@ updateAndCommit inputParams =
                     { authToken = params.authToken
                     , owner = params.owner
                     , repo = params.repo
-                    , message = params.commitMessage
+                    , message = params.message
                     , tree = output.newTreeSha
                     , parents = [ output.headSha ]
                     }
