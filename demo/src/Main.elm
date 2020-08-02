@@ -48,6 +48,7 @@ type alias Model =
     , owner : String
     , repo : String
     , branch : String
+    , prefix : String
     , fileName : String
     , message : String
     , output : String
@@ -64,6 +65,7 @@ type Msg
     | InputAccessToken String
     | InputOwner String
     | InputRepo String
+    | InputPrefix String
     | InputMessage String
       -- FILE
     | LocalFileRequested FileOperation
@@ -91,6 +93,7 @@ init flags =
       , repo = ""
       , branch = "master"
       , message = ""
+      , prefix = ""
       , fileName = ""
       , content = ""
       }
@@ -121,6 +124,9 @@ update msg model =
         InputMessage str ->
             ( { model | message = str }, Cmd.none )
 
+        InputPrefix str ->
+            ( { model | prefix = str }, Cmd.none )
+
         -- FILE
         LocalFileRequested fileOperation ->
             ( model, Select.file [ "application/text" ] (LocalFileLoaded fileOperation) )
@@ -136,7 +142,12 @@ update msg model =
                 , owner = model.owner
                 , repo = model.repo
                 , branch = model.branch
-                , path = model.fileName
+                , path =
+                    if model.prefix == "" then
+                        model.fileName
+
+                    else
+                        model.prefix ++ "/" ++ model.fileName
                 , sha = ""
                 , message = model.message
                 , content = content
@@ -216,6 +227,7 @@ mainColumn model =
             , inputAccessToken model
             , inputOwner model
             , inputRepo model
+            , inputPrefix model
             , inputMessage model
             , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton ]
             , el [ Font.size 14 ] (text ("sha: " ++ model.output))
@@ -270,6 +282,16 @@ inputRepo model =
         { onChange = InputRepo
         , text = model.repo
         , placeholder = Just (Input.placeholder [] (el [] (text "repo")))
+        , label = Input.labelLeft [] <| el [] (text "")
+        }
+
+
+inputPrefix : Model -> Element Msg
+inputPrefix model =
+    Input.text []
+        { onChange = InputPrefix
+        , text = model.prefix
+        , placeholder = Just (Input.placeholder [] (el [] (text """file prefix, e.g, "foo/bar" — can be blank""")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
 
