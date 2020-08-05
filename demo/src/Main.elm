@@ -75,7 +75,7 @@ type Msg
       -- REPO
     | GitHubFileCreated (Result Http.Error { content : { sha : String } })
     | RefUpdated (Result Http.Error { sha : String })
-    | DecodeContent (Result Http.Error { encoding : String, content : String, sha : String })
+    | GotContent (Result Http.Error String)
 
 
 type FileOperation
@@ -89,13 +89,13 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { authToken = "b86d78547b9ee4bb93b1f2fbeda108ce14ed856f"
+    ( { authToken = ""
       , output = ""
       , owner = "jxxcarlson"
       , repo = "minilatex-docs"
       , branch = "master"
       , message = ""
-      , prefix = "qft/01_trajectories.tex"
+      , prefix = ""
       , fileName = ""
       , content = ""
       }
@@ -184,13 +184,13 @@ update msg model =
                 Err err ->
                     ( { model | output = Debug.toString err }, Cmd.none )
 
-        DecodeContent result ->
+        GotContent result ->
             case result of
-                Ok reply ->
-                    ( { model | output = reply.content }, Cmd.none )
+                Ok content ->
+                    ( { model | output = content }, Cmd.none )
 
-                Err err ->
-                    ( { model | output = Debug.toString err }, Cmd.none )
+                Err _ ->
+                    ( { model | output = "Error getting file contents" }, Cmd.none )
 
 
 
@@ -214,15 +214,18 @@ createAndCommitFile params =
 
 
 getFileContentsCmd params =
-    Task.attempt DecodeContent
-        (Github.getFileContents
-            { authToken = params.authToken
-            , owner = params.owner
-            , repo = params.repo
-            , ref = "master"
-            , path = params.path
-            }
-        )
+    Http.request
+        { method = "GET"
+        , headers =
+            [ Http.header "Authorization" ("token " ++ params.authToken)
+            , Http.header "Accept" "application/vnd.github.VERSION.raw"
+            ]
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/contents/" ++ params.path ++ "?ref=" ++ params.ref
+        , body = Http.emptyBody
+        , expect = Http.expectString GotContent
+        , timeout = Nothing
+        , tracker = Nothing
+        }
 
 
 createBlobCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
