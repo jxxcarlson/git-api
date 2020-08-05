@@ -6,7 +6,7 @@ module Github exposing
     , getHeadRef, getCommitInfo
     , updateAndCommit, UpdateAndCommitParams
     , getComments, createComment
-    , createBlob, createTree, getBlob, updateRef
+    , createBlob, createTree, getBlob, getRawFileContentsCmd, updateRef
     )
 
 {-|
@@ -359,25 +359,11 @@ getFileContents :
     , ref : String
     , path : String
     }
-    ->
-        Task Http.Error
-            { encoding : String
-            , content : String
-            , sha : String
-            }
+    -> Task Http.Error String
 getFileContents params =
     let
         decoder =
-            Json.Decode.map3
-                (\encoding content sha ->
-                    { encoding = encoding
-                    , content = content
-                    , sha = sha
-                    }
-                )
-                (Json.Decode.at [ "encoding" ] Json.Decode.string)
-                (Json.Decode.at [ "content" ] Json.Decode.string)
-                (Json.Decode.at [ "sha" ] Json.Decode.string)
+            Json.Decode.string
     in
     Http.task
         { method = "GET"
@@ -392,8 +378,33 @@ getFileContents params =
         }
 
 
-{-| <https://api.github.com/repos/jxxcarlson/minilatex-docs/git/refs/heads/master>
+{-| Get raw file contents. Note that the type signature is different from getFileContents.
 -}
+getRawFileContentsCmd :
+    { a
+        | authToken : String
+        , owner : String
+        , path : String
+        , ref : String
+        , repo : String
+    }
+    -> (Result Http.Error String -> msg)
+    -> Cmd msg
+getRawFileContentsCmd params msg_ =
+    Http.request
+        { method = "GET"
+        , headers =
+            [ Http.header "Authorization" ("token " ++ params.authToken)
+            , Http.header "Accept" "application/vnd.github.VERSION.raw"
+            ]
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/contents/" ++ params.path ++ "?ref=" ++ params.ref
+        , body = Http.emptyBody
+        , expect = Http.expectString msg_
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 getHeadRef :
     { a
         | owner : String

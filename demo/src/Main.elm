@@ -147,7 +147,7 @@ update msg model =
                     , path = model.prefix
                     }
             in
-            ( model, getFileContentsCmd params )
+            ( model, Github.getRawFileContentsCmd params GotContent )
 
         LocalFileContentDecoded fileOperation content ->
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
@@ -211,21 +211,6 @@ createAndCommitFile params =
             , content = params.content
             }
         )
-
-
-getFileContentsCmd params =
-    Http.request
-        { method = "GET"
-        , headers =
-            [ Http.header "Authorization" ("token " ++ params.authToken)
-            , Http.header "Accept" "application/vnd.github.VERSION.raw"
-            ]
-        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/contents/" ++ params.path ++ "?ref=" ++ params.ref
-        , body = Http.emptyBody
-        , expect = Http.expectString GotContent
-        , timeout = Nothing
-        , tracker = Nothing
-        }
 
 
 createBlobCmd : FileOperation -> { a | authToken : String, owner : String, repo : String, branch : String, path : String, message : String, content : String } -> Cmd Msg
