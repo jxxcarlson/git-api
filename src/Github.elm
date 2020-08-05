@@ -381,8 +381,11 @@ getFileContents params =
     in
     Http.task
         { method = "GET"
-        , headers = [ Http.header "Authorization" ("token " ++ params.authToken) ]
-        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/contents/" ++ params.path -- ++ "?ref=" ++ params.ref
+        , headers =
+            [ Http.header "Authorization" ("token " ++ params.authToken)
+            , Http.header "Accept" "application/vnd.github.VERSION.raw"
+            ]
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/contents/" ++ params.path ++ "?ref=" ++ params.ref
         , body = Http.emptyBody
         , resolver = jsonResolver decoder
         , timeout = Nothing
@@ -698,9 +701,13 @@ jsonResolver : Json.Decode.Decoder a -> Http.Resolver Http.Error a
 jsonResolver decoder =
     Http.stringResolver <|
         \response ->
+            let
+                _ =
+                    Debug.log "RESPONSE" response
+            in
             case response of
                 Http.GoodStatus_ _ body ->
-                    Json.Decode.decodeString decoder body
+                    Json.Decode.decodeString decoder (Debug.log "BODY" body)
                         |> Result.mapError Json.Decode.errorToString
                         |> Result.mapError Http.BadBody
 

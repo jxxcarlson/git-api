@@ -89,13 +89,13 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init flags =
-    ( { authToken = ""
+    ( { authToken = "b86d78547b9ee4bb93b1f2fbeda108ce14ed856f"
       , output = ""
-      , owner = ""
-      , repo = ""
+      , owner = "jxxcarlson"
+      , repo = "minilatex-docs"
       , branch = "master"
       , message = ""
-      , prefix = ""
+      , prefix = "qft/01_trajectories.tex"
       , fileName = ""
       , content = ""
       }
@@ -187,12 +187,7 @@ update msg model =
         DecodeContent result ->
             case result of
                 Ok reply ->
-                    case Base64.decode reply.content of
-                        Err err ->
-                            ( { model | output = "Base64.decode error: " ++ err }, Cmd.none )
-
-                        Ok content ->
-                            ( { model | output = content }, Cmd.none )
+                    ( { model | output = reply.content }, Cmd.none )
 
                 Err err ->
                     ( { model | output = Debug.toString err }, Cmd.none )
@@ -224,7 +219,7 @@ getFileContentsCmd params =
             { authToken = params.authToken
             , owner = params.owner
             , repo = params.repo
-            , ref = ""
+            , ref = "master"
             , path = params.path
             }
         )
