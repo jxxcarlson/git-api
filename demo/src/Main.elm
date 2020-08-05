@@ -71,9 +71,11 @@ type Msg
     | LocalFileRequested FileOperation
     | LocalFileLoaded FileOperation File
     | LocalFileContentDecoded FileOperation String
+    | GetFile
       -- REPO
     | GitHubFileCreated (Result Http.Error { content : { sha : String } })
     | RefUpdated (Result Http.Error { sha : String })
+    | DecodeContent (Result Http.Error { encoding : String, content : String, sha : String })
 
 
 type FileOperation
@@ -135,6 +137,18 @@ update msg model =
             ( { model | fileName = File.name file }, Task.perform (LocalFileContentDecoded fileOperation) (File.toString file) )
 
         -- REPO
+        GetFile ->
+            let
+                params =
+                    { authToken = model.authToken
+                    , owner = model.owner
+                    , repo = model.repo
+                    , ref = "master"
+                    , path = model.prefix
+                    }
+            in
+            ( model, getFileContentsCmd params )
+
         LocalFileContentDecoded fileOperation content ->
             ( { model | content = content, output = content |> SHA1.fromString |> SHA1.toHex }
             , createBlobCmd fileOperation
@@ -170,6 +184,19 @@ update msg model =
                 Err err ->
                     ( { model | output = Debug.toString err }, Cmd.none )
 
+        DecodeContent result ->
+            case result of
+                Ok reply ->
+                    case Base64.decode reply.content of
+                        Err err ->
+                            ( { model | output = "Base64.decode error: " ++ err }, Cmd.none )
+
+                        Ok content ->
+                            ( { model | output = content }, Cmd.none )
+
+                Err err ->
+                    ( { model | output = Debug.toString err }, Cmd.none )
+
 
 
 -- HELPERS
@@ -187,6 +214,18 @@ createAndCommitFile params =
             , sha = ""
             , message = params.message
             , content = params.content
+            }
+        )
+
+
+getFileContentsCmd params =
+    Task.attempt DecodeContent
+        (Github.getFileContents
+            { authToken = params.authToken
+            , owner = params.owner
+            , repo = params.repo
+            , ref = ""
+            , path = params.path
             }
         )
 
@@ -229,7 +268,7 @@ mainColumn model =
             , inputRepo model
             , inputPrefix model
             , inputMessage model
-            , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton ]
+            , row [ spacing 12, Element.moveRight 4 ] [ createBlobButton, updateBlobButton, getBlobButton ]
             , el [ Font.size 14 ] (text ("sha: " ++ model.output))
             , outputDisplay model
             ]
@@ -291,7 +330,7 @@ inputPrefix model =
     Input.text []
         { onChange = InputPrefix
         , text = model.prefix
-        , placeholder = Just (Input.placeholder [] (el [] (text """file prefix, e.g, "foo/bar" — can be blank""")))
+        , placeholder = Just (Input.placeholder [] (el [] (text """path or file prefix""")))
         , label = Input.labelLeft [] <| el [] (text "")
         }
 
@@ -322,6 +361,16 @@ updateBlobButton =
         [ Input.button buttonStyle
             { onPress = Just (LocalFileRequested FUpdate)
             , label = el [ width (px 100), centerX, centerY ] (text "Update file")
+            }
+        ]
+
+
+getBlobButton : Element Msg
+getBlobButton =
+    row [ centerX ]
+        [ Input.button buttonStyle
+            { onPress = Just GetFile
+            , label = el [ width (px 100), centerX, centerY ] (text "Get file")
             }
         ]
 

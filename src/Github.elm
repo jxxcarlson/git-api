@@ -354,6 +354,7 @@ NOTE: Not all input options and output fields are supported yet. Pull requests a
 -}
 getFileContents :
     { authToken : String
+    , owner : String
     , repo : String
     , ref : String
     , path : String
@@ -381,7 +382,7 @@ getFileContents params =
     Http.task
         { method = "GET"
         , headers = [ Http.header "Authorization" ("token " ++ params.authToken) ]
-        , url = "https://api.github.com/repos/" ++ params.repo ++ "/contents/" ++ params.path ++ "?ref=" ++ params.ref
+        , url = "https://api.github.com/repos/" ++ params.owner ++ "/" ++ params.repo ++ "/contents/" ++ params.path -- ++ "?ref=" ++ params.ref
         , body = Http.emptyBody
         , resolver = jsonResolver decoder
         , timeout = Nothing
